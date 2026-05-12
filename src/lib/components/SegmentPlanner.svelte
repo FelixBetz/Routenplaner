@@ -709,12 +709,16 @@
 
 <div class="planner">
   <div class="controls">
+    <label class="date-label">
+      Startdatum
+      <input type="date" bind:value={startDate} />
+    </label>
     <label>
-      Anzahl Abschnitte
+      Anzahl Tage
       <input type="number" min="1" max="100" bind:value={segmentCount} />
     </label>
     <button class="btn-generate" onclick={generate} disabled={generating}>
-      {generating ? "Generiere…" : "Abschnitte generieren"}
+      {generating ? "Generiere…" : "Tage generieren"}
     </button>
     {#if segments.length > 0}
       <button class="btn-clear" onclick={clearAll}>Alle löschen</button>
@@ -722,10 +726,6 @@
     <span class="route-info">{gpx.totalKm.toFixed(1)} km Gesamtstrecke</span>
     <span class="route-elev up">↑ {gpx.totalUphill.toFixed(0)} m</span>
     <span class="route-elev down">↓ {gpx.totalDownhill.toFixed(0)} m</span>
-    <label class="date-label">
-      Startdatum
-      <input type="date" bind:value={startDate} />
-    </label>
   </div>
 
   <!-- Marker management -->
@@ -869,19 +869,6 @@
           {/if}
           <div class="seg-fields">
             <label>
-              Name
-              <input
-                type="text"
-                value={edit.name}
-                oninput={(e) => {
-                  editStates[seg.id] = {
-                    ...edit,
-                    name: (e.target as HTMLInputElement).value,
-                  };
-                }}
-              />
-            </label>
-            <label>
               Notizen
               <textarea
                 rows="2"
@@ -906,7 +893,7 @@
     </div>
   {:else}
     <p class="empty-hint">
-      Noch keine Abschnitte. Anzahl eingeben und „Abschnitte generieren"
+      Noch keine Abschnitte. Anzahl eingeben und „Tage generieren"
       klicken.
     </p>
   {/if}
@@ -968,7 +955,6 @@
     gap: 0.5rem;
     color: #94a3b8;
     font-size: 0.875rem;
-    margin-left: auto;
   }
   .date-label input[type="date"] {
     padding: 0.3rem 0.5rem;
@@ -1325,7 +1311,6 @@
     font-size: 0.75rem;
     color: #94a3b8;
   }
-  .seg-fields input,
   .seg-fields textarea {
     background: #0f172a;
     border: 1px solid #334155;

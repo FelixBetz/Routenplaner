@@ -50,7 +50,7 @@
       </div>
       <div class="cstat">
         <span class="cval">{totalDays}</span>
-        <span class="clabel">Etappen gesamt</span>
+          <span class="clabel">Tage gesamt</span>
       </div>
       {#if data.startDate}
         <div class="cstat">
@@ -72,8 +72,7 @@
           <!-- Top row -->
           <div class="seg-top">
             <div class="seg-meta">
-              <span class="seg-num" style="color:{color}">Etappe {seg.position}</span>
-              <h2 class="seg-name">{seg.name}</h2>
+              <h2 class="seg-name">Tag {seg.position}</h2>
               {#if seg.date}
                 <span class="seg-date">{seg.date}</span>
               {/if}
@@ -277,13 +276,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.1rem;
-  }
-
-  .seg-num {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
   }
 
   .seg-name {
