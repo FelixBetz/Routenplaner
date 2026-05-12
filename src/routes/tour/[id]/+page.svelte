@@ -209,6 +209,12 @@
             ).toLocaleString("de")} Hm
           </p>
         </div>
+        <a
+          href="/tour/{tourId}/print"
+          target="_blank"
+          class="pdf-btn"
+          title="Etappenübersicht als PDF"
+        >📄 PDF</a>
         <label class="gpx-change-btn" title="Andere GPX laden">
           📂 GPX wechseln
           <input type="file" accept=".gpx" onchange={handleGpxFile} />
@@ -485,6 +491,21 @@
   .name-cancel-btn {
     background: #e5e7eb;
     color: #374151;
+  }
+
+  .pdf-btn {
+    padding: 0.5rem 1rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    color: #1d4ed8;
+    font-size: 0.85rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .pdf-btn:hover {
+    background: #dbeafe;
   }
 
   .gpx-change-btn {
