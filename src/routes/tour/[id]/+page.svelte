@@ -14,19 +14,28 @@
   const tourId = $derived(data.tour.id);
 
   let gpx = $state<GpxData | null>(null);
-  let sessions = $state(data.sessions);
-  let segments = $state<Segment[]>(data.segments ?? []);
-  let markers = $state<MapMarker[]>(data.markers ?? []);
+  let sessions = $state<typeof data.sessions>([]);
+  let segments = $state<Segment[]>([]);
+  let markers = $state<MapMarker[]>([]);
   let activeTab = $state<"training" | "planner">("planner");
   let gpxLoading = $state(false);
   let gpxError = $state("");
   let gpxFileName = $state("");
+
+  let editingName = $state(false);
+  let nameInput = $state("");
+  let nameInputEl = $state<HTMLInputElement | null>(null);
+
+  $effect(() => {
+    if (editingName) nameInputEl?.focus();
+  });
 
   $effect.pre(() => {
     gpx = data.gpx ?? null;
     sessions = data.sessions;
     segments = data.segments ?? [];
     markers = data.markers ?? [];
+    if (!editingName) nameInput = data.tour.name;
   });
 
   const progressKm = $derived(
@@ -99,9 +108,6 @@
     gpxFileName = "";
   }
 
-  let editingName = $state(false);
-  let nameInput = $state(data.tour.name);
-
   async function saveName() {
     const trimmed = nameInput.trim();
     if (!trimmed || trimmed === data.tour.name) {
@@ -171,11 +177,11 @@
               <input
                 class="name-input"
                 bind:value={nameInput}
+                bind:this={nameInputEl}
                 onkeydown={(e) => {
                   if (e.key === "Enter") saveName();
                   if (e.key === "Escape") editingName = false;
                 }}
-                autofocus
               />
               <button class="name-save-btn" onclick={saveName}>✓</button>
               <button

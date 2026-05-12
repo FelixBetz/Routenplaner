@@ -985,13 +985,6 @@
     font-weight: 600;
     margin-right: 0.5rem;
   }
-  .seg-sightseeing-badge {
-    font-size: 0.78rem;
-    color: #94a3b8;
-    font-style: italic;
-    margin-left: auto;
-    margin-right: 0.5rem;
-  }
   .btn-sightseeing {
     margin-left: auto;
     padding: 0.2rem 0.6rem;

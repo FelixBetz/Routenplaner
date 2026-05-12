@@ -125,8 +125,10 @@
     <div
       class="modal"
       onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
     >
       <div class="modal-header">
         <h3>Training bearbeiten</h3>
