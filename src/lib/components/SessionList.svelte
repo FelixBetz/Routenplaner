@@ -11,7 +11,7 @@
 
   let { tourId, sessions, onDeleted, onUpdated }: Props = $props();
 
-  // Neueste oben anzeigen; Farbindex bleibt an der Original-Reihenfolge (chronologisch)
+  // Show newest at top; color index stays at original order (chronological)
   const displayed = $derived([...sessions].reverse());
 
   let deletingId = $state<number | null>(null);

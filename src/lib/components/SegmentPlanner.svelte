@@ -115,7 +115,7 @@
     editStates = s;
   }
 
-  // Live-Vorschau der verschobenen km-Positionen — sightseeing days consume no km
+  // Live preview of shifted km positions — sightseeing days consume no km
   const computedPositions = $derived.by(() => {
     const result: Record<number, { start_km: number; end_km: number }> = {};
     let cursor = 0;

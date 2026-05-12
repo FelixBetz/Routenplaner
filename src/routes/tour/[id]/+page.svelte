@@ -58,6 +58,33 @@
       if (!res.ok) throw new Error("Speichern fehlgeschlagen");
       gpxFileName = file.name;
       gpx = parsed;
+
+      // Adjust last ride stage to new route end
+      if (segments.length > 0) {
+        const sorted = [...segments].sort((a, b) => a.position - b.position);
+        const lastRide = [...sorted].reverse().find((s) => !s.sightseeing);
+        if (lastRide) {
+          const newEnd = Math.round(parsed.totalKm * 10) / 10;
+          if (lastRide.end_km !== newEnd) {
+            const payload = sorted.map((s) => ({
+              position: s.position,
+              name: s.name,
+              notes: s.notes,
+              sightseeing: s.sightseeing,
+              start_km: s.start_km,
+              end_km: s.id === lastRide.id ? newEnd : s.end_km,
+            }));
+            const putRes = await fetch(`/api/tours/${tourId}/segments`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (putRes.ok) {
+              segments = await putRes.json();
+            }
+          }
+        }
+      }
     } catch (err: any) {
       gpxError = err.message ?? "GPX konnte nicht gelesen werden";
     } finally {
