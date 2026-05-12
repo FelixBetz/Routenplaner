@@ -9,7 +9,7 @@
 </script>
 
 <svelte:head>
-  <title>Routenplasdfsdner – Meine Touren</title>
+  <title>Routenplaner – Meine Touren</title>
 </svelte:head>
 
 <div class="dashboard">

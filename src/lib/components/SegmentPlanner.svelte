@@ -174,6 +174,24 @@
     }),
   );
 
+  // Markers that fall within each segment, with distance from segment start
+  const markersPerSegment = $derived.by(() => {
+    const result: Record<number, { name: string; distFromStart: number }[]> = {};
+    for (const seg of segments) {
+      const pos = computedPositions[seg.id];
+      const start = pos?.start_km ?? seg.start_km;
+      const end = pos?.end_km ?? seg.end_km;
+      result[seg.id] = markerPositions
+        .filter((mp) => mp.km >= start && mp.km <= end)
+        .sort((a, b) => a.km - b.km)
+        .map((mp) => ({
+          name: mp.marker.name,
+          distFromStart: Math.round((mp.km - start) * 10) / 10,
+        }));
+    }
+    return result;
+  });
+
   // Per-segment elevation gain/loss from full-resolution gpx.points
   const segmentElevations = $derived.by(() => {
     const result: Record<number, { up: number; down: number }> = {};
@@ -841,6 +859,13 @@
                 <span class="seg-elev down">↓ {elev.down} m</span>
               </div>
             {/if}
+            {#each (markersPerSegment[seg.id] ?? []).filter(wp => wp.distFromStart > 1) as wp}
+              <div class="seg-row2 seg-waypoint-row">
+                <span class="seg-waypoint-icon">📍</span>
+                <span class="seg-waypoint-name">{wp.name}</span>
+                <span class="seg-waypoint-dist">nach {wp.distFromStart.toFixed(1)} km</span>
+              </div>
+            {/each}
           {/if}
           <div class="seg-fields">
             <label>
@@ -1267,6 +1292,32 @@
   }
   .seg-elev.down {
     color: #4ade80;
+  }
+  .seg-waypoint-row {
+    align-items: center;
+    gap: 0.35rem;
+    border-top: 1px dashed #334155;
+    padding-top: 0.25rem;
+    margin-top: 0.1rem;
+  }
+  .seg-waypoint-icon {
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+  .seg-waypoint-name {
+    font-size: 0.78rem;
+    color: #93c5fd;
+    font-weight: 600;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .seg-waypoint-dist {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .seg-fields {
