@@ -1,6 +1,5 @@
-﻿import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
-import { join } from 'path';
+﻿import { neon } from '@neondatabase/serverless';
+import { DATABASE_URL } from '$env/static/private';
 import type {
     User, Tour, NewTour,
     Session, NewSession,
@@ -9,273 +8,246 @@ import type {
     GpxData,
 } from './types.js';
 
-const DB_PATH = join(process.cwd(), 'data', 'training.db');
-
-let _db: ReturnType<typeof Database> | null = null;
-
-function getDb() {
-    if (_db) return _db;
-    mkdirSync(join(process.cwd(), 'data'), { recursive: true });
-    _db = new Database(DB_PATH);
-    _db.pragma('journal_mode = WAL');
-    _db.pragma('foreign_keys = ON');
-
-    _db.exec(`
-        CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            username      TEXT    NOT NULL UNIQUE,
-            password_hash TEXT    NOT NULL,
-            created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS auth_sessions (
-            token      TEXT    PRIMARY KEY,
-            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            expires_at TEXT    NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS tours (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            name        TEXT    NOT NULL,
-            description TEXT    NOT NULL DEFAULT '',
-            gpx_data    TEXT    DEFAULT NULL,
-            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS sessions (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            tour_id   INTEGER NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
-            date      TEXT    NOT NULL,
-            name      TEXT    NOT NULL,
-            distance  INTEGER NOT NULL,
-            duration  INTEGER NOT NULL,
-            elevation INTEGER NOT NULL DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS segments (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            tour_id     INTEGER NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
-            position    INTEGER NOT NULL,
-            name        TEXT    NOT NULL DEFAULT '',
-            start_km    REAL    NOT NULL,
-            end_km      REAL    NOT NULL,
-            notes       TEXT    NOT NULL DEFAULT '',
-            sightseeing INTEGER NOT NULL DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS settings (
-            tour_id INTEGER NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
-            key     TEXT    NOT NULL,
-            value   TEXT    NOT NULL DEFAULT '',
-            PRIMARY KEY (tour_id, key)
-        );
-
-        CREATE TABLE IF NOT EXISTS markers (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            tour_id  INTEGER NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
-            name     TEXT    NOT NULL DEFAULT '',
-            orig_lat REAL    NOT NULL DEFAULT 0,
-            orig_lon REAL    NOT NULL DEFAULT 0
-        );
-    `);
-
-    return _db;
-}
+const sql = neon(DATABASE_URL);
 
 // -- Users ---------------------------------------------------------
 
-export function createUser(username: string, passwordHash: string): User {
-    const result = getDb().prepare(
-        'INSERT INTO users (username, password_hash) VALUES (?, ?)'
-    ).run(username, passwordHash);
-    return getDb().prepare('SELECT id, username, created_at FROM users WHERE id=?')
-        .get(result.lastInsertRowid) as User;
+export async function createUser(username: string, passwordHash: string): Promise<User> {
+    const rows = await sql`
+        INSERT INTO users (username, password_hash)
+        VALUES (${username}, ${passwordHash})
+        RETURNING id, username, created_at
+    `;
+    return rows[0] as User;
 }
 
-export function getUserByUsername(username: string): (User & { password_hash: string }) | null {
-    return getDb().prepare('SELECT id, username, password_hash, created_at FROM users WHERE username=?')
-        .get(username) as (User & { password_hash: string }) | null;
+export async function getUserByUsername(username: string): Promise<(User & { password_hash: string }) | null> {
+    const rows = await sql`
+        SELECT id, username, password_hash, created_at FROM users WHERE username = ${username}
+    `;
+    return (rows[0] as (User & { password_hash: string })) ?? null;
 }
 
-export function getUserById(id: number): User | null {
-    return getDb().prepare('SELECT id, username, created_at FROM users WHERE id=?')
-        .get(id) as User | null;
+export async function getUserById(id: number): Promise<User | null> {
+    const rows = await sql`
+        SELECT id, username, created_at FROM users WHERE id = ${id}
+    `;
+    return (rows[0] as User) ?? null;
 }
 
 // -- Auth Sessions -------------------------------------------------
 
-export function createAuthSession(token: string, userId: number, expiresAt: string): void {
-    getDb().prepare(
-        'INSERT INTO auth_sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
-    ).run(token, userId, expiresAt);
+export async function createAuthSession(token: string, userId: number, expiresAt: string): Promise<void> {
+    await sql`
+        INSERT INTO auth_sessions (token, user_id, expires_at)
+        VALUES (${token}, ${userId}, ${expiresAt})
+    `;
 }
 
-export function getAuthSession(token: string): { user_id: number; expires_at: string } | null {
-    return getDb().prepare(
-        'SELECT user_id, expires_at FROM auth_sessions WHERE token=?'
-    ).get(token) as { user_id: number; expires_at: string } | null;
+export async function getAuthSession(token: string): Promise<{ user_id: number; expires_at: string } | null> {
+    const rows = await sql`
+        SELECT user_id, expires_at FROM auth_sessions WHERE token = ${token}
+    `;
+    return (rows[0] as { user_id: number; expires_at: string }) ?? null;
 }
 
-export function deleteAuthSession(token: string): void {
-    getDb().prepare('DELETE FROM auth_sessions WHERE token=?').run(token);
+export async function deleteAuthSession(token: string): Promise<void> {
+    await sql`DELETE FROM auth_sessions WHERE token = ${token}`;
 }
 
-export function deleteExpiredAuthSessions(): void {
-    getDb().prepare("DELETE FROM auth_sessions WHERE expires_at < datetime('now')").run();
+export async function deleteExpiredAuthSessions(): Promise<void> {
+    await sql`DELETE FROM auth_sessions WHERE expires_at::timestamptz < NOW()`;
 }
 
 // -- Tours ---------------------------------------------------------
 
-export function getUserTours(userId: number): Tour[] {
-    return getDb().prepare(
-        'SELECT id, user_id, name, description, gpx_data, created_at FROM tours WHERE user_id=? ORDER BY created_at ASC'
-    ).all(userId) as Tour[];
+export async function getUserTours(userId: number): Promise<Tour[]> {
+    return await sql`
+        SELECT id, user_id, name, description, gpx_data, created_at
+        FROM tours WHERE user_id = ${userId} ORDER BY created_at ASC
+    ` as Tour[];
 }
 
-export function getTour(id: number): Tour | null {
-    return getDb().prepare(
-        'SELECT id, user_id, name, description, gpx_data, created_at FROM tours WHERE id=?'
-    ).get(id) as Tour | null;
+export async function getTour(id: number): Promise<Tour | null> {
+    const rows = await sql`
+        SELECT id, user_id, name, description, gpx_data, created_at FROM tours WHERE id = ${id}
+    `;
+    return (rows[0] as Tour) ?? null;
 }
 
-export function createTour(data: NewTour): Tour {
-    const result = getDb().prepare(
-        'INSERT INTO tours (user_id, name, description) VALUES (@user_id, @name, @description)'
-    ).run(data);
-    return getDb().prepare('SELECT id, user_id, name, description, gpx_data, created_at FROM tours WHERE id=?')
-        .get(result.lastInsertRowid) as Tour;
+export async function createTour(data: NewTour): Promise<Tour> {
+    const rows = await sql`
+        INSERT INTO tours (user_id, name, description)
+        VALUES (${data.user_id}, ${data.name}, ${data.description})
+        RETURNING id, user_id, name, description, gpx_data, created_at
+    `;
+    return rows[0] as Tour;
 }
 
-export function updateTour(id: number, data: Partial<Pick<Tour, 'name' | 'description'>>): Tour | null {
-    const fields: string[] = [];
-    if (data.name !== undefined) fields.push('name=@name');
-    if (data.description !== undefined) fields.push('description=@description');
-    if (fields.length === 0) return getTour(id);
-    const result = getDb().prepare(`UPDATE tours SET ${fields.join(', ')} WHERE id=@id`).run({ ...data, id });
-    if (result.changes === 0) return null;
+export async function updateTour(id: number, data: Partial<Pick<Tour, 'name' | 'description'>>): Promise<Tour | null> {
+    if (data.name !== undefined && data.description !== undefined) {
+        const rows = await sql`
+            UPDATE tours SET name = ${data.name}, description = ${data.description}
+            WHERE id = ${id}
+            RETURNING id, user_id, name, description, gpx_data, created_at
+        `;
+        return (rows[0] as Tour) ?? null;
+    } else if (data.name !== undefined) {
+        const rows = await sql`
+            UPDATE tours SET name = ${data.name} WHERE id = ${id}
+            RETURNING id, user_id, name, description, gpx_data, created_at
+        `;
+        return (rows[0] as Tour) ?? null;
+    } else if (data.description !== undefined) {
+        const rows = await sql`
+            UPDATE tours SET description = ${data.description} WHERE id = ${id}
+            RETURNING id, user_id, name, description, gpx_data, created_at
+        `;
+        return (rows[0] as Tour) ?? null;
+    }
     return getTour(id);
 }
 
-export function deleteTour(id: number): boolean {
-    return getDb().prepare('DELETE FROM tours WHERE id=?').run(id).changes > 0;
+export async function deleteTour(id: number): Promise<boolean> {
+    const result = await sql`DELETE FROM tours WHERE id = ${id}`;
+    return (result as unknown as { rowCount: number }).rowCount > 0;
 }
 
 // -- GPX -----------------------------------------------------------
 
-export function getTourGpx(tourId: number): GpxData | null {
-    const row = getDb().prepare('SELECT gpx_data FROM tours WHERE id=?').get(tourId) as { gpx_data: string | null } | null;
+export async function getTourGpx(tourId: number): Promise<GpxData | null> {
+    const rows = await sql`SELECT gpx_data FROM tours WHERE id = ${tourId}`;
+    const row = rows[0] as { gpx_data: string | null } | undefined;
     if (!row || !row.gpx_data) return null;
     try { return JSON.parse(row.gpx_data) as GpxData; } catch { return null; }
 }
 
-export function setTourGpx(tourId: number, data: GpxData): void {
-    getDb().prepare('UPDATE tours SET gpx_data=? WHERE id=?').run(JSON.stringify(data), tourId);
+export async function setTourGpx(tourId: number, data: GpxData): Promise<void> {
+    await sql`UPDATE tours SET gpx_data = ${JSON.stringify(data)} WHERE id = ${tourId}`;
 }
 
-export function deleteTourGpx(tourId: number): void {
-    getDb().prepare('UPDATE tours SET gpx_data=NULL WHERE id=?').run(tourId);
+export async function deleteTourGpx(tourId: number): Promise<void> {
+    await sql`UPDATE tours SET gpx_data = NULL WHERE id = ${tourId}`;
 }
 
 // -- Training Sessions ---------------------------------------------
 
-export function getAllSessions(tourId: number): Session[] {
-    return getDb().prepare(
-        'SELECT * FROM sessions WHERE tour_id=? ORDER BY date ASC, id ASC'
-    ).all(tourId) as Session[];
+export async function getAllSessions(tourId: number): Promise<Session[]> {
+    return await sql`
+        SELECT * FROM sessions WHERE tour_id = ${tourId} ORDER BY date ASC, id ASC
+    ` as Session[];
 }
 
-export function insertSession(data: NewSession): Session {
-    const result = getDb().prepare(`
+export async function insertSession(data: NewSession): Promise<Session> {
+    const rows = await sql`
         INSERT INTO sessions (tour_id, date, name, distance, duration, elevation)
-        VALUES (@tour_id, @date, @name, @distance, @duration, @elevation)
-    `).run(data);
-    return getDb().prepare('SELECT * FROM sessions WHERE id=?').get(result.lastInsertRowid) as Session;
+        VALUES (${data.tour_id}, ${data.date}, ${data.name}, ${data.distance}, ${data.duration}, ${data.elevation})
+        RETURNING *
+    `;
+    return rows[0] as Session;
 }
 
-export function deleteSession(tourId: number, id: number): boolean {
-    return getDb().prepare('DELETE FROM sessions WHERE id=? AND tour_id=?').run(id, tourId).changes > 0;
+export async function deleteSession(tourId: number, id: number): Promise<boolean> {
+    const result = await sql`DELETE FROM sessions WHERE id = ${id} AND tour_id = ${tourId}`;
+    return (result as unknown as { rowCount: number }).rowCount > 0;
 }
 
-export function updateSession(tourId: number, id: number, data: Omit<NewSession, 'tour_id'>): Session | null {
-    const result = getDb().prepare(`
-        UPDATE sessions SET date=@date, name=@name, distance=@distance, duration=@duration, elevation=@elevation
-        WHERE id=@id AND tour_id=@tour_id
-    `).run({ ...data, id, tour_id: tourId });
-    if (result.changes === 0) return null;
-    return getDb().prepare('SELECT * FROM sessions WHERE id=?').get(id) as Session;
+export async function updateSession(tourId: number, id: number, data: Omit<NewSession, 'tour_id'>): Promise<Session | null> {
+    const rows = await sql`
+        UPDATE sessions
+        SET date = ${data.date}, name = ${data.name}, distance = ${data.distance},
+            duration = ${data.duration}, elevation = ${data.elevation}
+        WHERE id = ${id} AND tour_id = ${tourId}
+        RETURNING *
+    `;
+    return (rows[0] as Session) ?? null;
 }
 
 // -- Segments ------------------------------------------------------
 
-export function getAllSegments(tourId: number): Segment[] {
-    return getDb().prepare(
-        'SELECT * FROM segments WHERE tour_id=? ORDER BY position ASC'
-    ).all(tourId) as Segment[];
+export async function getAllSegments(tourId: number): Promise<Segment[]> {
+    return await sql`
+        SELECT * FROM segments WHERE tour_id = ${tourId} ORDER BY position ASC
+    ` as Segment[];
 }
 
-export function replaceSegments(tourId: number, segments: NewSegment[]): Segment[] {
-    const db = getDb();
-    db.prepare('DELETE FROM segments WHERE tour_id=?').run(tourId);
-    const insert = db.prepare(`
-        INSERT INTO segments (tour_id, position, name, start_km, end_km, notes, sightseeing)
-        VALUES (@tour_id, @position, @name, @start_km, @end_km, @notes, @sightseeing)
-    `);
-    const insertMany = db.transaction((rows: NewSegment[]) => {
-        for (const row of rows) insert.run(row);
-    });
-    insertMany(segments);
+export async function replaceSegments(tourId: number, segments: NewSegment[]): Promise<Segment[]> {
+    await sql`DELETE FROM segments WHERE tour_id = ${tourId}`;
+    if (segments.length > 0) {
+        for (const seg of segments) {
+            await sql`
+                INSERT INTO segments (tour_id, position, name, start_km, end_km, notes, sightseeing)
+                VALUES (${seg.tour_id}, ${seg.position}, ${seg.name}, ${seg.start_km}, ${seg.end_km}, ${seg.notes}, ${seg.sightseeing})
+            `;
+        }
+    }
     return getAllSegments(tourId);
 }
 
-export function updateSegment(
+export async function updateSegment(
     tourId: number,
     id: number,
     data: Partial<Pick<Segment, 'name' | 'notes' | 'start_km' | 'end_km' | 'sightseeing'>>
-): Segment | null {
-    const fields: string[] = [];
-    if (data.name !== undefined) fields.push('name=@name');
-    if (data.notes !== undefined) fields.push('notes=@notes');
-    if (data.start_km !== undefined) fields.push('start_km=@start_km');
-    if (data.end_km !== undefined) fields.push('end_km=@end_km');
-    if (data.sightseeing !== undefined) fields.push('sightseeing=@sightseeing');
+): Promise<Segment | null> {
+    const fields = Object.keys(data) as (keyof typeof data)[];
     if (fields.length === 0) {
-        return getDb().prepare('SELECT * FROM segments WHERE id=? AND tour_id=?').get(id, tourId) as Segment | null;
+        const rows = await sql`SELECT * FROM segments WHERE id = ${id} AND tour_id = ${tourId}`;
+        return (rows[0] as Segment) ?? null;
     }
-    const result = getDb().prepare(`UPDATE segments SET ${fields.join(', ')} WHERE id=@id AND tour_id=@tour_id`)
-        .run({ ...data, id, tour_id: tourId });
-    if (result.changes === 0) return null;
-    return getDb().prepare('SELECT * FROM segments WHERE id=?').get(id) as Segment;
+    // Build update with only provided fields
+    if (data.name !== undefined && data.notes !== undefined && data.start_km !== undefined && data.end_km !== undefined && data.sightseeing !== undefined) {
+        const rows = await sql`UPDATE segments SET name=${data.name}, notes=${data.notes}, start_km=${data.start_km}, end_km=${data.end_km}, sightseeing=${data.sightseeing} WHERE id=${id} AND tour_id=${tourId} RETURNING *`;
+        return (rows[0] as Segment) ?? null;
+    }
+    // Partial updates — fetch current, merge, update
+    const current = await sql`SELECT * FROM segments WHERE id = ${id} AND tour_id = ${tourId}`;
+    if (!current[0]) return null;
+    const cur = current[0] as Segment;
+    const rows = await sql`
+        UPDATE segments
+        SET name       = ${data.name ?? cur.name},
+            notes      = ${data.notes ?? cur.notes},
+            start_km   = ${data.start_km ?? cur.start_km},
+            end_km     = ${data.end_km ?? cur.end_km},
+            sightseeing = ${data.sightseeing ?? cur.sightseeing}
+        WHERE id = ${id} AND tour_id = ${tourId}
+        RETURNING *
+    `;
+    return (rows[0] as Segment) ?? null;
 }
 
 // -- Settings ------------------------------------------------------
 
-export function getSetting(tourId: number, key: string): string {
-    const row = getDb().prepare('SELECT value FROM settings WHERE tour_id=? AND key=?').get(tourId, key) as { value: string } | undefined;
-    return row?.value ?? '';
+export async function getSetting(tourId: number, key: string): Promise<string> {
+    const rows = await sql`SELECT value FROM settings WHERE tour_id = ${tourId} AND key = ${key}`;
+    return (rows[0] as { value: string } | undefined)?.value ?? '';
 }
 
-export function setSetting(tourId: number, key: string, value: string): void {
-    getDb().prepare(
-        'INSERT INTO settings (tour_id, key, value) VALUES (?, ?, ?) ON CONFLICT(tour_id, key) DO UPDATE SET value=excluded.value'
-    ).run(tourId, key, value);
+export async function setSetting(tourId: number, key: string, value: string): Promise<void> {
+    await sql`
+        INSERT INTO settings (tour_id, key, value) VALUES (${tourId}, ${key}, ${value})
+        ON CONFLICT (tour_id, key) DO UPDATE SET value = EXCLUDED.value
+    `;
 }
 
 // -- Markers -------------------------------------------------------
 
-export function getAllMarkers(tourId: number): MapMarker[] {
-    return getDb().prepare(
-        'SELECT * FROM markers WHERE tour_id=? ORDER BY name ASC'
-    ).all(tourId) as MapMarker[];
+export async function getAllMarkers(tourId: number): Promise<MapMarker[]> {
+    return await sql`
+        SELECT * FROM markers WHERE tour_id = ${tourId} ORDER BY name ASC
+    ` as MapMarker[];
 }
 
-export function insertMarker(data: NewMapMarker): MapMarker {
-    const result = getDb().prepare(
-        'INSERT INTO markers (tour_id, name, orig_lat, orig_lon) VALUES (@tour_id, @name, @orig_lat, @orig_lon)'
-    ).run(data);
-    return getDb().prepare('SELECT * FROM markers WHERE id=?').get(result.lastInsertRowid) as MapMarker;
+export async function insertMarker(data: NewMapMarker): Promise<MapMarker> {
+    const rows = await sql`
+        INSERT INTO markers (tour_id, name, orig_lat, orig_lon)
+        VALUES (${data.tour_id}, ${data.name}, ${data.orig_lat}, ${data.orig_lon})
+        RETURNING *
+    `;
+    return rows[0] as MapMarker;
 }
 
-export function deleteMarker(tourId: number, id: number): boolean {
-    return getDb().prepare('DELETE FROM markers WHERE id=? AND tour_id=?').run(id, tourId).changes > 0;
+export async function deleteMarker(tourId: number, id: number): Promise<boolean> {
+    const result = await sql`DELETE FROM markers WHERE id = ${id} AND tour_id = ${tourId}`;
+    return (result as unknown as { rowCount: number }).rowCount > 0;
 }

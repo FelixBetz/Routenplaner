@@ -3,22 +3,22 @@ import { getTour, getAllSegments, replaceSegments } from '$lib/db.js';
 import type { NewSegment } from '$lib/types.js';
 import type { RequestHandler } from './$types.js';
 
-function resolveTourId(params: { id: string }, locals: App.Locals): number {
+async function resolveTourId(params: { id: string }, locals: App.Locals): Promise<number> {
     const id = parseInt(params.id, 10);
     if (isNaN(id)) error(400, 'Invalid tour id');
-    const tour = getTour(id);
+    const tour = await getTour(id);
     if (!tour) error(404, 'Tour not found');
     if (tour.user_id !== locals.user!.id) error(403, 'Forbidden');
     return id;
 }
 
-export const GET: RequestHandler = ({ params, locals }) => {
-    return json(getAllSegments(resolveTourId(params, locals)));
+export const GET: RequestHandler = async ({ params, locals }) => {
+    return json(await getAllSegments(await resolveTourId(params, locals)));
 };
 
 /** POST { count, totalKm } → generate equal segments */
 export const POST: RequestHandler = async ({ params, locals, request }) => {
-    const tourId = resolveTourId(params, locals);
+    const tourId = await resolveTourId(params, locals);
     let body: unknown;
     try { body = await request.json(); } catch { error(400, 'Invalid JSON'); }
     const { count, totalKm } = body as { count: number; totalKm: number };
@@ -35,12 +35,12 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
         sightseeing: 0,
     }));
     segments[segments.length - 1].end_km = Math.round(totalKm * 10) / 10;
-    return json(replaceSegments(tourId, segments), { status: 201 });
+    return json(await replaceSegments(tourId, segments), { status: 201 });
 };
 
 /** PUT [{...}] → replace all */
 export const PUT: RequestHandler = async ({ params, locals, request }) => {
-    const tourId = resolveTourId(params, locals);
+    const tourId = await resolveTourId(params, locals);
     let body: unknown;
     try { body = await request.json(); } catch { error(400, 'Invalid JSON'); }
     if (!Array.isArray(body)) error(400, 'Expected array');
@@ -54,11 +54,11 @@ export const PUT: RequestHandler = async ({ params, locals, request }) => {
         notes: typeof s.notes === 'string' ? s.notes : '',
         sightseeing: s.sightseeing ? 1 : 0,
     }));
-    return json(replaceSegments(tourId, newSegments));
+    return json(await replaceSegments(tourId, newSegments));
 };
 
-export const DELETE: RequestHandler = ({ params, locals }) => {
-    const tourId = resolveTourId(params, locals);
-    replaceSegments(tourId, []);
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+    const tourId = await resolveTourId(params, locals);
+    await replaceSegments(tourId, []);
     return json({ ok: true });
 };

@@ -33,10 +33,10 @@ export function sessionExpiresAt(): string {
     return d.toISOString();
 }
 
-export function startSession(userId: number): string {
-    deleteExpiredAuthSessions();
+export async function startSession(userId: number): Promise<string> {
+    await deleteExpiredAuthSessions();
     const token = generateSessionToken();
     const expiresAt = sessionExpiresAt();
-    createAuthSession(token, userId, expiresAt);
+    await createAuthSession(token, userId, expiresAt);
     return token;
 }

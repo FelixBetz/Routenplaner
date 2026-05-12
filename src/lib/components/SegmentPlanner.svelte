@@ -353,7 +353,7 @@
     drawSegments(L);
   });
 
-  function drawSegments(L: typeof import("leaflet").default) {
+  function drawSegments(L: typeof import("leaflet")) {
     if (!leafletMap) return;
     for (const layer of segmentLayers) layer.remove();
     segmentLayers = [];
@@ -418,7 +418,7 @@
     import("leaflet").then(({ default: L }) => drawMarkers(L));
   });
 
-  function drawMarkers(L: typeof import("leaflet").default) {
+  function drawMarkers(L: typeof import("leaflet")) {
     if (!leafletMap) return;
     for (const m of markerLayers) m.remove();
     markerLayers = [];

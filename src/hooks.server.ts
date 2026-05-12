@@ -7,9 +7,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     const token = event.cookies.get('auth_token');
 
     if (token) {
-        const session = getAuthSession(token);
+        const session = await getAuthSession(token);
         if (session && new Date(session.expires_at) > new Date()) {
-            event.locals.user = getUserById(session.user_id);
+            event.locals.user = await getUserById(session.user_id);
         } else {
             event.cookies.delete('auth_token', { path: '/' });
             event.locals.user = null;

@@ -27,14 +27,14 @@ export const actions: Actions = {
             return fail(400, { error: 'Passwörter stimmen nicht überein.' });
         }
 
-        const existing = getUserByUsername(username);
+        const existing = await getUserByUsername(username);
         if (existing) {
             return fail(409, { error: 'Benutzername bereits vergeben.' });
         }
 
         const hash = await hashPassword(password);
-        const user = createUser(username, hash);
-        const token = startSession(user.id);
+        const user = await createUser(username, hash);
+        const token = await startSession(user.id);
 
         cookies.set('auth_token', token, {
             path: '/',

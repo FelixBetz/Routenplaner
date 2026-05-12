@@ -3,21 +3,21 @@ import { getTour, getAllSessions, insertSession } from '$lib/db.js';
 import type { NewSession } from '$lib/types.js';
 import type { RequestHandler } from './$types.js';
 
-function resolveTourId(params: { id: string }, locals: App.Locals): number {
+async function resolveTourId(params: { id: string }, locals: App.Locals): Promise<number> {
     const id = parseInt(params.id, 10);
     if (isNaN(id)) error(400, 'Invalid tour id');
-    const tour = getTour(id);
+    const tour = await getTour(id);
     if (!tour) error(404, 'Tour not found');
     if (tour.user_id !== locals.user!.id) error(403, 'Forbidden');
     return id;
 }
 
-export const GET: RequestHandler = ({ params, locals }) => {
-    return json(getAllSessions(resolveTourId(params, locals)));
+export const GET: RequestHandler = async ({ params, locals }) => {
+    return json(await getAllSessions(await resolveTourId(params, locals)));
 };
 
 export const POST: RequestHandler = async ({ params, locals, request }) => {
-    const tourId = resolveTourId(params, locals);
+    const tourId = await resolveTourId(params, locals);
     let body: unknown;
     try { body = await request.json(); } catch { error(400, 'Invalid JSON'); }
     const b = body as Record<string, unknown>;
@@ -33,5 +33,5 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
         duration: Number(b.duration),
         elevation: Number(b.elevation ?? 0),
     };
-    return json(insertSession(data), { status: 201 });
+    return json(await insertSession(data), { status: 201 });
 };

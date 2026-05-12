@@ -17,7 +17,7 @@ export const actions: Actions = {
             return fail(400, { error: 'Bitte alle Felder ausfüllen.' });
         }
 
-        const user = getUserByUsername(username);
+        const user = await getUserByUsername(username);
         if (!user) {
             return fail(401, { error: 'Ungültige Zugangsdaten.' });
         }
@@ -27,7 +27,7 @@ export const actions: Actions = {
             return fail(401, { error: 'Ungültige Zugangsdaten.' });
         }
 
-        const token = startSession(user.id);
+        const token = await startSession(user.id);
         cookies.set('auth_token', token, {
             path: '/',
             httpOnly: true,
