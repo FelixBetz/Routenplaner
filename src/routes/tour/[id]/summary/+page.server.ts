@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { getTour, getAllSegments, getAllMarkers, getSetting, getTourGpx } from '$lib/db.js';
 import type { PageServerLoad } from './$types.js';
-import type { TrackPoint, Segment, MapMarker } from '$lib/types.js';
+import type { TrackPoint, MapMarker } from '$lib/types.js';
 
 function segmentElevation(points: TrackPoint[], startKm: number, endKm: number) {
     let up = 0, down = 0;
@@ -25,7 +25,6 @@ function markersForSegment(
 ) {
     return markers
         .map((m) => {
-            // Snap marker to nearest GPX point
             let best = gpxPoints[0];
             let bestD = Infinity;
             for (const p of gpxPoints) {
@@ -51,12 +50,11 @@ function sparklineData(
     const pts = points.filter(p => p.cumDist >= startKm && p.cumDist <= endKm);
     if (pts.length < 2) return '';
 
-    const minEle = globalMinEle;
     const eleRange = (globalMaxEle - globalMinEle) || 1;
     const kmRange = endKm - startKm || 1;
 
     const toX = (km: number) => ((km - startKm) / kmRange) * w;
-    const toY = (ele: number) => h - ((ele - minEle) / eleRange) * h;
+    const toY = (ele: number) => h - ((ele - globalMinEle) / eleRange) * h;
 
     return pts
         .map(p => `${toX(p.cumDist).toFixed(1)},${toY(p.ele).toFixed(1)}`)
@@ -90,7 +88,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
     const sorted = [...segments].sort((a, b) => a.position - b.position);
 
-    // Global elevation range so all sparklines share the same scale
     const globalMinEle = gpx ? Math.min(...gpx.points.map(p => p.ele)) : 0;
     const globalMaxEle = gpx ? Math.max(...gpx.points.map(p => p.ele)) : 1;
 

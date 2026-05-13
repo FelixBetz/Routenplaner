@@ -209,12 +209,6 @@
             ).toLocaleString("de")} Hm
           </p>
         </div>
-        <a
-          href="/tour/{tourId}/print"
-          target="_blank"
-          class="pdf-btn"
-          title="Etappenübersicht als PDF"
-        >📄 PDF</a>
         <label class="gpx-change-btn" title="Andere GPX laden">
           📂 GPX wechseln
           <input type="file" accept=".gpx" onchange={handleGpxFile} />
@@ -263,6 +257,7 @@
         class:active={activeTab === "training"}
         onclick={() => (activeTab = "training")}>Training</button
       >
+      <a href="/tour/{tourId}/summary" class="tab-btn">Zusammenfassung</a>
     </nav>
 
     {#if activeTab === "training"}
@@ -493,21 +488,6 @@
     color: #374151;
   }
 
-  .pdf-btn {
-    padding: 0.5rem 1rem;
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 8px;
-    color: #1d4ed8;
-    font-size: 0.85rem;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .pdf-btn:hover {
-    background: #dbeafe;
-  }
-
   .gpx-change-btn {
     padding: 0.5rem 1rem;
     background: #f3f4f6;
@@ -592,6 +572,9 @@
     cursor: pointer;
     font-size: 0.9rem;
     transition: all 0.15s;
+    text-decoration: none;
+    color: inherit;
+    display: inline-block;
   }
 
   .tab-btn.active {
@@ -676,7 +659,6 @@
       font-size: 1.1rem;
     }
 
-    .pdf-btn,
     .gpx-change-btn,
     .gpx-remove-btn {
       font-size: 0.78rem;

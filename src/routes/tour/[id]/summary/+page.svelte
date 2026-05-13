@@ -13,14 +13,13 @@
 </script>
 
 <svelte:head>
-  <title>{tour.name} – Etappenübersicht</title>
+  <title>{tour.name} – Zusammenfassung</title>
 </svelte:head>
 
-<div class="print-page">
-  <!-- Print button (hidden in print) -->
-  <div class="no-print top-bar">
+<div class="summary-page">
+  <!-- Top bar -->
+  <div class="top-bar">
     <a href="/tour/{tour.id}" class="back-link">← Zurück zur Tour</a>
-    <button class="print-btn" onclick={() => window.print()}>🖨️ Als PDF speichern</button>
   </div>
 
   <!-- Cover / Header -->
@@ -101,7 +100,6 @@
                 class="sparkline"
                 aria-hidden="true"
               >
-                <!-- Elevation line -->
                 <polyline
                   points={seg.sparkline}
                   fill="none"
@@ -132,33 +130,33 @@
     {/each}
   </div>
 
-  <footer class="print-footer">
-    Erstellt am {new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}
+  <footer class="summary-footer">
+    Zusammenfassung · {tour.name}
   </footer>
 </div>
 
 <style>
-  /* ── Reset & base ─────────────────────────── */
+  :global(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
   :global(body) {
     margin: 0;
     font-family: "Segoe UI", system-ui, sans-serif;
-    background: #fff;
+    background: #f3f4f6;
     color: #1e293b;
   }
 
-  .print-page {
-    max-width: 800px;
+  .summary-page {
+    max-width: 900px;
     margin: 0 auto;
-    padding: 1.25rem 1.25rem;
+    padding: 1.25rem 1.25rem 3rem;
   }
 
-  /* ── Top bar (screen only) ─────────────────── */
+  /* ── Top bar ─────────────────────────────── */
   .top-bar {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
-    gap: 1rem;
+    margin-bottom: 1.25rem;
   }
 
   .back-link {
@@ -166,19 +164,8 @@
     text-decoration: none;
     font-size: 0.9rem;
   }
-
-  .print-btn {
-    padding: 0.5rem 1.2rem;
-    background: #3b82f6;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    cursor: pointer;
-  }
-
-  .print-btn:hover {
-    background: #2563eb;
+  .back-link:hover {
+    color: #2563eb;
   }
 
   /* ── Cover ────────────────────────────────── */
@@ -187,6 +174,9 @@
     padding: 1rem 0 1.25rem;
     border-bottom: 2px solid #e2e8f0;
     margin-bottom: 1.25rem;
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.5rem;
   }
 
   .tour-title {
@@ -238,13 +228,18 @@
     gap: 0.6rem;
   }
 
+  @media (max-width: 600px) {
+    .segments {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .seg-card {
     display: flex;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
     overflow: hidden;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    background: #fff;
     min-height: 180px;
   }
 
@@ -354,38 +349,12 @@
   }
 
   /* ── Footer ───────────────────────────────── */
-  .print-footer {
+  .summary-footer {
     margin-top: 1.5rem;
     text-align: center;
     font-size: 0.72rem;
     color: #94a3b8;
     border-top: 1px solid #e2e8f0;
     padding-top: 0.6rem;
-  }
-
-  /* ── Print media ──────────────────────────── */
-  @media print {
-    :global(body) { background: #fff; }
-
-    .no-print { display: none !important; }
-
-    .print-page {
-      max-width: 100%;
-      padding: 0;
-    }
-
-    @page {
-      size: A4;
-      margin: 15mm 12mm;
-    }
-
-    .seg-card {
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-
-    .cover {
-      page-break-after: auto;
-    }
   }
 </style>
