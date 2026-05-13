@@ -303,4 +303,32 @@
   .delete-btn:hover {
     background: #fef2f2;
   }
+
+  /* ── Mobile ── */
+  @media (max-width: 480px) {
+    .dashboard {
+      padding: 1.25rem 0.75rem;
+    }
+
+    .dash-header-left h1 {
+      font-size: 1.3rem;
+    }
+
+    .tours-section {
+      padding: 1rem;
+    }
+
+    .create-form {
+      flex-direction: column;
+    }
+
+    .create-form input {
+      flex: none;
+      width: 100%;
+    }
+
+    .create-form button {
+      width: 100%;
+    }
+  }
 </style>

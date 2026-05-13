@@ -1349,4 +1349,37 @@
     padding: 2rem 0;
     font-size: 0.9rem;
   }
+
+  /* ── Mobile ── */
+  @media (max-width: 640px) {
+    .controls {
+      gap: 0.6rem;
+      padding: 0.6rem 0.75rem;
+    }
+
+    .route-info {
+      margin-left: 0;
+    }
+
+    .map-container {
+      height: 260px;
+    }
+
+    .segment-list {
+      grid-template-columns: 1fr;
+    }
+
+    .marker-form {
+      flex-wrap: wrap;
+    }
+
+    .marker-form input {
+      width: 100%;
+      flex: none;
+    }
+
+    .marker-form button {
+      width: 100%;
+    }
+  }
 </style>

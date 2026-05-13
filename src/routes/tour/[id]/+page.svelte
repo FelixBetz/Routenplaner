@@ -651,4 +651,59 @@
     padding: 1.25rem;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   }
+
+  /* ── Mobile ── */
+  @media (max-width: 640px) {
+    .app {
+      padding: 0 0.5rem 2rem;
+    }
+
+    .header-inner {
+      gap: 0.5rem;
+    }
+
+    .header-left h1 {
+      font-size: 1.1rem;
+    }
+
+    .subtitle {
+      font-size: 0.78rem;
+    }
+
+    .name-input {
+      min-width: 0;
+      width: 100%;
+      font-size: 1.1rem;
+    }
+
+    .pdf-btn,
+    .gpx-change-btn,
+    .gpx-remove-btn {
+      font-size: 0.78rem;
+      padding: 0.4rem 0.6rem;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .stat {
+      padding: 0.6rem 0.75rem;
+    }
+
+    .stat-val {
+      font-size: 1.2rem;
+    }
+
+    .import-box {
+      padding: 2rem 1.25rem;
+    }
+
+    .form-wrap,
+    .list-wrap,
+    .planner-section {
+      padding: 0.85rem;
+    }
+  }
 </style>

@@ -264,4 +264,14 @@
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  @media (max-width: 480px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+
+    .form-header {
+      flex-wrap: wrap;
+    }
+  }
 </style>
