@@ -10,6 +10,10 @@
   const rideSegments = $derived(segments.filter((s) => !s.sightseeing));
   const totalDays = $derived(segments.length);
   const rideDays = $derived(rideSegments.length);
+
+  function getStageNumber(index: number): number {
+    return segments.slice(0, index + 1).filter((s) => !s.sightseeing).length;
+  }
 </script>
 
 <svelte:head>
@@ -71,7 +75,12 @@
           <!-- Top row -->
           <div class="seg-top">
             <div class="seg-meta">
-              <h2 class="seg-name">Tag {seg.position}</h2>
+              <h2 class="seg-name">
+                Tag {seg.position}
+                {#if !seg.sightseeing}
+                  (Etappe {getStageNumber(i)})
+                {/if}
+              </h2>
               {#if seg.date}
                 <span class="seg-date">{seg.date}</span>
               {/if}
