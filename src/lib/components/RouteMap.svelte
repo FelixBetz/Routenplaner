@@ -23,16 +23,19 @@
 
   onMount(async () => {
     L = (await import("leaflet")).default;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    document.head.appendChild(link);
+    // leaflet.css wird global in +layout.svelte importiert, nicht mehr hier
+    // per <link> nachgeladen (CDN-Abhaengigkeit + Race gegen L.map() unten).
 
     map = L.map(mapEl).setView([47.5, 14.8], 7);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
         '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
     }).addTo(map);
+
+    // Sicherheitsnetz: falls der Container beim ersten Layout-Tick noch
+    // nicht seine endgueltige Groesse hat (Grid/Flex noch nicht fertig,
+    // Webfonts noch am Laden), holt Leaflet die korrekte Kachelgroesse nach.
+    requestAnimationFrame(() => map?.invalidateSize());
 
     renderRoute();
 

@@ -189,6 +189,57 @@
     }),
   );
 
+  // Breite der Timeline in px, fuer die Kollisionserkennung der Marker-Labels
+  let timelineWidth = $state(0);
+
+  // Zeilenhoehe je Marker-Label-Reihe und grobe Zeichenbreite fuer 0.72rem/700
+  const ROW_H = 16;
+  const CHAR_PX = 7.2;
+  const LABEL_PAD = 12;
+
+  /**
+   * Weist jedem Marker eine Zeile zu, damit sich eng beieinander liegende
+   * Labels (z.B. Modra/Pezinok/Svaty Jur, nur wenige km auseinander) nicht
+   * ueberlappen. Greedy-Intervall-Packing: von links nach rechts sortiert,
+   * jedes Label kommt in die erste Zeile, deren letztes Label bereits
+   * vorbei ist; sonst eine neue Zeile.
+   */
+  const markerRows = $derived.by(() => {
+    const rows = new Map<number, number>();
+    if (!timelineWidth || totalRideKm <= 0 || markerPositions.length === 0) {
+      return rows;
+    }
+    const items = markerPositions
+      .map((mp) => {
+        const pct = Math.max(0, Math.min(100, (mp.km / totalRideKm) * 100));
+        const centerPx = (pct / 100) * timelineWidth;
+        const halfWidth = (mp.marker.name.length * CHAR_PX + LABEL_PAD) / 2;
+        return {
+          id: mp.marker.id,
+          left: centerPx - halfWidth,
+          right: centerPx + halfWidth,
+        };
+      })
+      .sort((a, b) => a.left - b.left);
+    const rowEnds: number[] = [];
+    for (const it of items) {
+      let row = rowEnds.findIndex((end) => end <= it.left);
+      if (row === -1) {
+        row = rowEnds.length;
+        rowEnds.push(it.right);
+      } else {
+        rowEnds[row] = it.right;
+      }
+      rows.set(it.id, row);
+    }
+    return rows;
+  });
+
+  // Wie viele Zeilen die Label-Spur insgesamt braucht (0, wenn keine Marker)
+  const labelRows = $derived(
+    markerRows.size ? Math.max(...markerRows.values()) + 1 : 0,
+  );
+
   // Markers that fall within each segment, with distance from segment start
   const markersPerSegment = $derived.by(() => {
     const result: Record<number, { name: string; distFromStart: number }[]> = {};
@@ -382,6 +433,11 @@
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
     }).addTo(leafletMap);
+
+    // Sicherheitsnetz: falls der Container beim ersten Layout-Tick noch
+    // nicht seine endgueltige Groesse hat (Grid/Flex noch nicht fertig,
+    // Webfonts noch am Laden), holt Leaflet die korrekte Kachelgroesse nach.
+    requestAnimationFrame(() => leafletMap?.invalidateSize());
 
     drawSegments(L);
   });
@@ -920,43 +976,63 @@
 
   {#if segments.length > 0}
     <!-- Timeline resizer -->
-    <div class="timeline-wrap" bind:this={timelineEl}>
-      <div class="tl-bar">
-        {#each segments as seg, i (seg.id)}
-          {@const isSightseeing =
-            editStates[seg.id]?.sightseeing ?? Boolean(seg.sightseeing)}
-          {#if !isSightseeing}
-            {@const len =
-              editStates[seg.id]?.length_km ?? seg.end_km - seg.start_km}
-            {@const color = SESSION_COLORS[i % SESSION_COLORS.length]}
-            <div class="tl-seg" style="flex:{len}; background:{color}">
-              <span class="tl-label">{seg.position}. Tag</span>
-              <span class="tl-km">{len.toFixed(1)} km</span>
-            </div>
-          {/if}
+    <div
+      class="timeline-wrap"
+      bind:this={timelineEl}
+      bind:clientWidth={timelineWidth}
+    >
+      {#if labelRows > 0}
+        <div class="tl-labels" style="height:{labelRows * ROW_H}px">
+          {#each markerPositions as mp (mp.marker.id)}
+            {@const pct =
+              totalRideKm > 0
+                ? Math.max(0, Math.min(100, (mp.km / totalRideKm) * 100))
+                : 0}
+            {@const row = markerRows.get(mp.marker.id) ?? 0}
+            <span
+              class="tl-marker-label"
+              style="left:{pct}%; bottom:{row * ROW_H}px"
+              >{mp.marker.name}</span
+            >
+          {/each}
+        </div>
+      {/if}
+      <div class="tl-track">
+        <div class="tl-bar">
+          {#each segments as seg, i (seg.id)}
+            {@const isSightseeing =
+              editStates[seg.id]?.sightseeing ?? Boolean(seg.sightseeing)}
+            {#if !isSightseeing}
+              {@const len =
+                editStates[seg.id]?.length_km ?? seg.end_km - seg.start_km}
+              {@const color = SESSION_COLORS[i % SESSION_COLORS.length]}
+              <div class="tl-seg" style="flex:{len}; background:{color}">
+                <span class="tl-label">{seg.position}. Tag</span>
+                <span class="tl-km">{len.toFixed(1)} km</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
+        <!-- Draggable boundary handles -->
+        {#each handlePcts as pct, i}
+          <div
+            class="tl-handle"
+            role="separator"
+            aria-label="Grenze verschieben"
+            style="left:{pct}%"
+            onpointerdown={(e) => startHandleDrag(e, i)}
+            onpointermove={onHandlePointerMove}
+            onpointerup={onHandlePointerUp}
+          ></div>
+        {/each}
+        {#each markerPositions as mp (mp.marker.id)}
+          {@const pct =
+            totalRideKm > 0
+              ? Math.max(0, Math.min(100, (mp.km / totalRideKm) * 100))
+              : 0}
+          <div class="tl-marker-tick" style="left:{pct}%"></div>
         {/each}
       </div>
-      <!-- Draggable boundary handles -->
-      {#each handlePcts as pct, i}
-        <div
-          class="tl-handle"
-          role="separator"
-          aria-label="Grenze verschieben"
-          style="left:{pct}%"
-          onpointerdown={(e) => startHandleDrag(e, i)}
-          onpointermove={onHandlePointerMove}
-          onpointerup={onHandlePointerUp}
-        ></div>
-      {/each}
-      {#each markerPositions as mp}
-        {@const pct =
-          totalRideKm > 0
-            ? Math.max(0, Math.min(100, (mp.km / totalRideKm) * 100))
-            : 0}
-        <div class="tl-marker" style="left:{pct}%">
-          <span class="tl-marker-label">{mp.marker.name}</span>
-        </div>
-      {/each}
     </div>
 
     <!-- Segment cards -->
@@ -1307,10 +1383,16 @@
   /* ── Timeline ── */
   .timeline-wrap {
     position: relative;
-    height: 64px;
     border-radius: 8px;
-    overflow: visible;
     user-select: none;
+  }
+  .tl-labels {
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .tl-track {
+    position: relative;
+    height: 64px;
   }
   .tl-bar {
     display: flex;
@@ -1369,7 +1451,7 @@
     background: #fff;
     width: 5px;
   }
-  .tl-marker {
+  .tl-marker-tick {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -1381,8 +1463,6 @@
   }
   .tl-marker-label {
     position: absolute;
-    bottom: calc(100% + 3px);
-    left: 50%;
     transform: translateX(-50%);
     font-size: 0.72rem;
     color: #000;
