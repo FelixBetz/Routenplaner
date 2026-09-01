@@ -73,6 +73,10 @@
   let markerImporting = $state(false);
   let markerClearing = $state(false);
 
+  // Namens-Labels der Marker auf der Karte ein-/ausblenden (rein visuell,
+  // die Marker-Pins selbst bleiben immer sichtbar)
+  let showMarkerLabels = $state(true);
+
   // Bulk-Import: mehrere Orte als eingefuegte Textliste, ein Ort pro Zeile
   let bulkOpen = $state(false);
   let bulkText = $state("");
@@ -1105,9 +1109,20 @@
     {/if}
   </div>
 
-  <div class="map-wrap">
+  <div class="map-wrap" class:labels-hidden={!showMarkerLabels}>
     <div class="map-container" bind:this={mapEl}></div>
     <button class="zoom-route-btn" onclick={zoomToRoute} title="Auf Route zoomen">⊕ Route</button>
+    {#if markers.length > 0}
+      <button
+        class="zoom-route-btn label-toggle-btn"
+        onclick={() => (showMarkerLabels = !showMarkerLabels)}
+        title={showMarkerLabels
+          ? "Marker-Namen auf der Karte ausblenden"
+          : "Marker-Namen auf der Karte einblenden"}
+      >
+        {showMarkerLabels ? "🏷️ Namen aus" : "🏷️ Namen ein"}
+      </button>
+    {/if}
   </div>
 
   <div class="chart-container">
@@ -1264,6 +1279,12 @@
 </div>
 
 <style>
+  /* Nur wenn .map-wrap die Klasse .labels-hidden traegt, verschwinden die
+     Leaflet-generierten Namens-Labels — die Pins selbst bleiben stehen. */
+  .map-wrap.labels-hidden :global(.custom-marker-label) {
+    display: none;
+  }
+
   :global(.custom-marker-wrap) {
     display: flex;
     flex-direction: column;
@@ -1434,6 +1455,10 @@
     color: #1d4ed8;
   }
   .zoom-route-btn:hover { background: #eff6ff; }
+  .label-toggle-btn {
+    right: auto;
+    left: 10px;
+  }
 
   .chart-container {
     height: 110px;
