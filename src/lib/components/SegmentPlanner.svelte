@@ -26,6 +26,7 @@
   let segmentCount = $state(segments.length > 0 ? segments.length : 5);
   let generating = $state(false);
   let reordering = $state(false);
+  let equalizing = $state(false);
   let editStates = $state<
     Record<
       number,
@@ -613,6 +614,51 @@
     onSegmentsChanged([]);
   }
 
+  /**
+   * Verteilt die Gesamtstrecke gleichmäßig auf alle Fahrtage.
+   * Ruhetage (sightseeing = true, 0 km) behalten ihre Position und
+   * werden nicht angetastet — nur die Laenge der Fahrtage aendert sich.
+   * Der letzte Fahrtag bekommt den Rundungsrest, damit die Summe exakt
+   * gpx.totalKm ergibt (gleiches Prinzip wie beim initialen Generieren
+   * im Server, siehe POST /api/tours/[id]/segments).
+   */
+  async function equalizeRideDays() {
+    if (equalizing) return;
+    const rideIds = segments
+      .filter(
+        (s) => !(editStates[s.id]?.sightseeing ?? Boolean(s.sightseeing)),
+      )
+      .map((s) => s.id);
+    if (rideIds.length === 0) {
+      alert("Keine Fahrtage vorhanden — alle Tage sind als Ruhetag markiert.");
+      return;
+    }
+    if (
+      !confirm(
+        `${rideIds.length} Fahrtag${rideIds.length === 1 ? "" : "e"} gleichmäßig auf ${gpx.totalKm.toFixed(1)} km verteilen? Manuell angepasste Etappenlängen gehen dabei verloren, Ruhetage bleiben unverändert.`,
+      )
+    )
+      return;
+    equalizing = true;
+    try {
+      const each = Math.round((gpx.totalKm / rideIds.length) * 10) / 10;
+      const newStates = { ...editStates };
+      let assigned = 0;
+      rideIds.forEach((id, i) => {
+        const isLast = i === rideIds.length - 1;
+        const len = isLast
+          ? Math.round((gpx.totalKm - assigned) * 10) / 10
+          : each;
+        newStates[id] = { ...newStates[id], length_km: len };
+        assigned += len;
+      });
+      editStates = newStates;
+      await saveAll();
+    } finally {
+      equalizing = false;
+    }
+  }
+
   function buildPayload(orderedSegs: Segment[]) {
     let cursor = 0;
     return orderedSegs.map((s, idx) => {
@@ -791,6 +837,14 @@
     </button>
     {#if segments.length > 0}
       <button class="btn-clear" onclick={clearAll}>Alle löschen</button>
+      <button
+        class="btn-equalize"
+        onclick={equalizeRideDays}
+        disabled={equalizing}
+        title="Gesamtstrecke gleichmäßig auf alle Fahrtage verteilen, Ruhetage bleiben bei 0 km"
+      >
+        {equalizing ? "Verteile…" : "Gleichmäßig verteilen"}
+      </button>
     {/if}
     <span class="route-info">{gpx.totalKm.toFixed(1)} km Gesamtstrecke</span>
     <span class="route-elev up">↑ {gpx.totalUphill.toFixed(0)} m</span>
@@ -1107,6 +1161,19 @@
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.875rem;
+  }
+  .btn-equalize {
+    padding: 0.4rem 0.8rem;
+    background: #0ea5e9;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  .btn-equalize:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
   .route-info {
     margin-left: auto;
