@@ -73,6 +73,24 @@
   let markerImporting = $state(false);
   let markerClearing = $state(false);
 
+  // Bulk-Import: mehrere Orte als eingefuegte Textliste, ein Ort pro Zeile
+  let bulkOpen = $state(false);
+  let bulkText = $state("");
+  let bulkImporting = $state(false);
+  let bulkStatus = $state("");
+
+  const bulkLines = $derived.by(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of bulkText.split("\n")) {
+      const line = raw.trim();
+      if (!line || seen.has(line.toLowerCase())) continue;
+      seen.add(line.toLowerCase());
+      out.push(line);
+    }
+    return out;
+  });
+
   // GPX-Wegpunkte, die noch nicht als Marker existieren.
   // Abgleich ueber den Namen, damit ein erneuter Import nichts doppelt anlegt.
   const importableWaypoints = $derived.by(() => {
@@ -585,6 +603,86 @@
     }
   }
 
+  /**
+   * Geokodiert jede Zeile aus bulkText einzeln ueber Nominatim (wie die
+   * Einzelsuche oben) und legt alle gefundenen Orte in einem Request ueber
+   * den Bulk-POST-Endpunkt an. Zwischen den Nominatim-Anfragen liegt eine
+   * kuenstliche Pause, weil der oeffentliche Dienst max. 1 Anfrage/Sekunde
+   * erlaubt — bei vielen Zeilen sonst Gefahr von Fehlschlaegen/Sperren.
+   */
+  async function importBulkMarkers() {
+    const lines = bulkLines;
+    if (!lines.length || bulkImporting) return;
+    bulkImporting = true;
+    const found: { name: string; orig_lat: number; orig_lon: number }[] = [];
+    const notFound: string[] = [];
+    try {
+      for (let i = 0; i < lines.length; i++) {
+        bulkStatus = `Suche ${i + 1}/${lines.length}: ${lines[i]}`;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(lines[i])}&format=json&limit=1`,
+          );
+          const results = (await res.json()) as Array<{
+            lat: string;
+            lon: string;
+          }>;
+          if (results.length) {
+            found.push({
+              name: lines[i],
+              orig_lat: parseFloat(results[0].lat),
+              orig_lon: parseFloat(results[0].lon),
+            });
+          } else {
+            notFound.push(lines[i]);
+          }
+        } catch {
+          notFound.push(lines[i]);
+        }
+        if (i < lines.length - 1) {
+          await new Promise((r) => setTimeout(r, 1100));
+        }
+      }
+
+      if (found.length === 0) {
+        alert(
+          notFound.length
+            ? `Keiner der ${notFound.length} Orte wurde gefunden:\n${notFound.join(", ")}`
+            : "Keine Orte zum Importieren.",
+        );
+        return;
+      }
+
+      bulkStatus = "Speichere…";
+      const res = await fetch(`/api/tours/${tourId}/markers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(found),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { created, skipped } = (await res.json()) as {
+        created: MapMarker[];
+        skipped: number;
+      };
+      onMarkersChanged(
+        [...markers, ...created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+
+      const parts = [`${created.length} Marker hinzugefügt.`];
+      if (skipped > 0) parts.push(`${skipped} bereits vorhanden.`);
+      if (notFound.length > 0) parts.push(`Nicht gefunden: ${notFound.join(", ")}`);
+      if (skipped > 0 || notFound.length > 0) alert(parts.join("\n"));
+
+      bulkText = "";
+      bulkOpen = false;
+    } catch (e) {
+      alert("Fehler: " + (e as Error).message);
+    } finally {
+      bulkImporting = false;
+      bulkStatus = "";
+    }
+  }
+
   async function importWaypointsAsMarkers() {
     const todo = importableWaypoints;
     if (!todo.length || markerImporting) return;
@@ -925,6 +1023,14 @@
       <button type="submit" disabled={markerAdding || !markerSearch.trim()}>
         {markerAdding ? "…" : "+ Marker"}
       </button>
+      <button
+        type="button"
+        class="import-btn"
+        onclick={() => (bulkOpen = !bulkOpen)}
+        title="Mehrere Orte auf einmal per Textliste hinzufügen"
+      >
+        {bulkOpen ? "▴ Mehrere Orte" : "▾ Mehrere Orte"}
+      </button>
       {#if gpx.waypoints.length > 0}
         <button
           type="button"
@@ -941,6 +1047,40 @@
         </button>
       {/if}
     </form>
+    {#if bulkOpen}
+      <div class="bulk-import">
+        <textarea
+          class="bulk-textarea"
+          bind:value={bulkText}
+          disabled={bulkImporting}
+          rows="4"
+          placeholder={"Ein Ort pro Zeile, z.B.:\nGraz\nSalzburg\nInnsbruck"}
+        ></textarea>
+        <div class="bulk-actions">
+          <button
+            type="button"
+            class="btn-generate"
+            onclick={importBulkMarkers}
+            disabled={bulkImporting || bulkLines.length === 0}
+          >
+            {bulkImporting
+              ? bulkStatus || "Importiere…"
+              : `${bulkLines.length} Ort${bulkLines.length === 1 ? "" : "e"} hinzufügen`}
+          </button>
+          <button
+            type="button"
+            class="btn-cancel"
+            onclick={() => {
+              bulkOpen = false;
+              bulkText = "";
+            }}
+            disabled={bulkImporting}
+          >
+            Abbrechen
+          </button>
+        </div>
+      </div>
+    {/if}
     {#if markers.length > 0}
       <div class="marker-list">
         {#each markers as m (m.id)}
@@ -1376,6 +1516,39 @@
     font-size: 0.78rem;
   }
   .marker-clear:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .bulk-import {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .bulk-textarea {
+    width: 100%;
+    resize: vertical;
+    padding: 0.4rem 0.6rem;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f1f5f9;
+    font-size: 0.85rem;
+    font-family: inherit;
+  }
+  .bulk-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .btn-cancel {
+    padding: 0.4rem 0.8rem;
+    background: #334155;
+    color: #f1f5f9;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  .btn-cancel:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
