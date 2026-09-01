@@ -247,7 +247,29 @@ export async function insertMarker(data: NewMapMarker): Promise<MapMarker> {
     return rows[0] as MapMarker;
 }
 
+/**
+ * Legt mehrere Marker in einer Transaktion an (Bulk-Import aus GPX-Wegpunkten).
+ * Ein einzelner Round-Trip statt einem pro Wegpunkt.
+ */
+export async function insertMarkers(data: NewMapMarker[]): Promise<MapMarker[]> {
+    if (!data.length) return [];
+    const results = (await sql.transaction(
+        data.map((d) => sql`
+            INSERT INTO markers (tour_id, name, orig_lat, orig_lon)
+            VALUES (${d.tour_id}, ${d.name}, ${d.orig_lat}, ${d.orig_lon})
+            RETURNING *
+        `),
+    )) as unknown as MapMarker[][];
+    return results.map((rows) => rows[0]);
+}
+
 export async function deleteMarker(tourId: number, id: number): Promise<boolean> {
     const result = await sql`DELETE FROM markers WHERE id = ${id} AND tour_id = ${tourId}`;
     return (result as unknown as { rowCount: number }).rowCount > 0;
+}
+
+/** Loescht alle Marker einer Tour und liefert die Anzahl der geloeschten Zeilen. */
+export async function deleteAllMarkers(tourId: number): Promise<number> {
+    const result = await sql`DELETE FROM markers WHERE tour_id = ${tourId}`;
+    return (result as unknown as { rowCount: number }).rowCount;
 }

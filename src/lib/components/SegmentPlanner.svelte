@@ -69,6 +69,20 @@
   // Marker add form
   let markerSearch = $state("");
   let markerAdding = $state(false);
+  let markerImporting = $state(false);
+  let markerClearing = $state(false);
+
+  // GPX-Wegpunkte, die noch nicht als Marker existieren.
+  // Abgleich ueber den Namen, damit ein erneuter Import nichts doppelt anlegt.
+  const importableWaypoints = $derived.by(() => {
+    const known = new Set(markers.map((m) => m.name.trim().toLowerCase()));
+    return gpx.waypoints.filter((w) => {
+      const name = w.name.trim();
+      if (!name || known.has(name.toLowerCase())) return false;
+      known.add(name.toLowerCase());
+      return true;
+    });
+  });
 
   // Timeline resize
   let timelineEl: HTMLDivElement = $state() as unknown as HTMLDivElement;
@@ -514,9 +528,64 @@
     }
   }
 
+  async function importWaypointsAsMarkers() {
+    const todo = importableWaypoints;
+    if (!todo.length || markerImporting) return;
+    markerImporting = true;
+    try {
+      const res = await fetch(`/api/tours/${tourId}/markers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          todo.map((w) => ({
+            name: w.name.trim(),
+            orig_lat: w.lat,
+            orig_lon: w.lon,
+          })),
+        ),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { created } = (await res.json()) as {
+        created: MapMarker[];
+        skipped: number;
+      };
+      // Nach Namen sortieren, damit die Reihenfolge der eines Reloads
+      // entspricht (getAllMarkers sortiert per ORDER BY name ASC).
+      onMarkersChanged(
+        [...markers, ...created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    } catch (e) {
+      alert("Import fehlgeschlagen: " + (e as Error).message);
+    } finally {
+      markerImporting = false;
+    }
+  }
+
   async function removeMarker(id: number) {
     await fetch(`/api/tours/${tourId}/markers?id=${id}`, { method: "DELETE" });
     onMarkersChanged(markers.filter((m) => m.id !== id));
+  }
+
+  async function clearAllMarkers() {
+    if (!markers.length || markerClearing) return;
+    if (
+      !confirm(
+        `Alle ${markers.length} Marker löschen? Das lässt sich nicht rückgängig machen.`,
+      )
+    )
+      return;
+    markerClearing = true;
+    try {
+      const res = await fetch(`/api/tours/${tourId}/markers?all=1`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      onMarkersChanged([]);
+    } catch (e) {
+      alert("Löschen fehlgeschlagen: " + (e as Error).message);
+    } finally {
+      markerClearing = false;
+    }
   }
 
   async function generate() {
@@ -746,6 +815,21 @@
       <button type="submit" disabled={markerAdding || !markerSearch.trim()}>
         {markerAdding ? "…" : "+ Marker"}
       </button>
+      {#if gpx.waypoints.length > 0}
+        <button
+          type="button"
+          class="import-btn"
+          onclick={importWaypointsAsMarkers}
+          disabled={markerImporting || importableWaypoints.length === 0}
+          title={importableWaypoints.length === 0
+            ? "Alle Wegpunkte der GPX-Datei sind bereits als Marker vorhanden"
+            : `${importableWaypoints.length} Wegpunkte aus der GPX-Datei übernehmen`}
+        >
+          {markerImporting
+            ? "…"
+            : `⇩ GPX-Wegpunkte (${importableWaypoints.length})`}
+        </button>
+      {/if}
     </form>
     {#if markers.length > 0}
       <div class="marker-list">
@@ -758,6 +842,16 @@
           </span>
         {/each}
       </div>
+      <button
+        class="btn-clear marker-clear"
+        onclick={clearAllMarkers}
+        disabled={markerClearing}
+        title="Alle Marker dieser Tour löschen"
+      >
+        {markerClearing
+          ? "…"
+          : `Alle Marker löschen (${markers.length})`}
+      </button>
     {/if}
   </div>
 
@@ -1099,6 +1193,12 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+  .marker-form .import-btn {
+    background: #334155;
+  }
+  .marker-form .import-btn:not(:disabled):hover {
+    background: #475569;
+  }
   .marker-list {
     display: flex;
     flex-wrap: wrap;
@@ -1126,6 +1226,15 @@
   }
   .marker-chip button:hover {
     color: #ef4444;
+  }
+  .marker-clear {
+    align-self: flex-start;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.78rem;
+  }
+  .marker-clear:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* ── Timeline ── */
